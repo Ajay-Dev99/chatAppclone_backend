@@ -18,7 +18,7 @@ const sendEmail = async (email, subject, otp) => {
 
     const text = `
 <h1>Hello ${email}</h1>
-<p>Your OTP is ${text}</p>
+<p>Your OTP is ${otp}</p>
 `;
     try {
         const mailOptions = {
