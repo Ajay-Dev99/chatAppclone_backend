@@ -1,6 +1,7 @@
 const sendEmail = require("../helpers/nodeMailer");
+const User = require("../model/userModel");
 
-// In-memory map for OTPs. Keys are normalized emails (trim + lowercase).
+
 let otpMap = new Map();
 
 const sendOtp = async (req, res) => {
@@ -12,17 +13,12 @@ const sendOtp = async (req, res) => {
 
         const normalizedEmail = String(email).trim().toLowerCase();
         const otp = Math.floor(100000 + Math.random() * 900000);
-
-        // Store using normalized email so lookups are consistent.
         otpMap.set(normalizedEmail, otp);
-
-        // Auto-delete the OTP after 5 minutes to avoid stale entries.
         setTimeout(() => {
             otpMap.delete(normalizedEmail);
         }, 5 * 60 * 1000);
 
         const subject = "OTP Verification";
-        // send the email to the original provided address (preserve case for display)
         const result = await sendEmail(email, subject, otp);
         return res.status(200).json({ message: "OTP sent successfully", result });
 
@@ -46,13 +42,37 @@ const verifyOtp = async (req, res) => {
             return res.status(400).json({ message: "OTP not found or expired" });
         }
 
-        // Compare as numbers to avoid type mismatches (body parsers often give strings).
+       
         if (Number(storedOtp) !== Number(otp)) {
             return res.status(400).json({ message: "Invalid OTP" });
         }
 
         otpMap.delete(normalizedEmail);
-        return res.status(200).json({ message: "OTP verified successfully" });
+
+        
+        try {
+            let user = await User.findOne({ email: normalizedEmail });
+            if (!user) {
+                
+                const localPart = normalizedEmail.split('@')[0] || 'user';
+                const prettyName = localPart.replace(/[._\d]+/g, ' ').replace(/\s+/g, ' ').trim();
+                const name = prettyName.length ? prettyName.replace(/\b\w/g, c => c.toUpperCase()) : 'User';
+
+                user = new User({ name, email: normalizedEmail, isVerified: true });
+                await user.save();
+            } else {
+                
+                if (!user.isVerified) {
+                    user.isVerified = true;
+                    await user.save();
+                }
+            }
+
+            return res.status(200).json({ message: "OTP verified successfully", user });
+        } catch (dbError) {
+            console.error('DB error while creating/verifying user:', dbError);
+            return res.status(500).json({ message: 'OTP verified but failed to create/update user' });
+        }
     } catch (error) {
         console.log(error);
         res.status(500).json({ message: error.message });
