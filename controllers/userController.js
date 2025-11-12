@@ -1,6 +1,10 @@
 const User = require("../model/userModel");
 
 const listUsers = async (req, res) => {
+    if (!req.user) {
+        return res.status(401).json({ message: "Unauthorized" });
+    }
+
     let { limit = 10, page = 1 } = req.query;
     limit = Number(limit) || 10;
     page = Number(page) || 1;
@@ -10,7 +14,7 @@ const listUsers = async (req, res) => {
     try {
         const total = await User.countDocuments();
 
-        const users = await User.find()
+        const users = await User.find({}, { __v: 0, password: 0 })
             .limit(limit)
             .skip((page - 1) * limit)
             .lean();

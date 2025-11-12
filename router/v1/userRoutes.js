@@ -1,7 +1,9 @@
 
-const userRoutes = require('express').Router();
-const { listUsers } = require('../../controllers/userController');
+const userRoutes = require("express").Router();
+const { listUsers } = require("../../controllers/userController");
+const authenticate = require("../../middleware/authMiddleware");
 
-userRoutes.get('/list', listUsers);
+userRoutes.use(authenticate);
+userRoutes.get("/list", listUsers);
 
 module.exports = userRoutes;
