@@ -14,7 +14,7 @@ const listUsers = async (req, res) => {
     try {
         const total = await User.countDocuments();
 
-        const users = await User.find({}, { __v: 0, password: 0 })
+        const users = await User.find({ _id: { $ne: req.user._id } }, { __v: 0, password: 0 })
             .limit(limit)
             .skip((page - 1) * limit)
             .lean();
