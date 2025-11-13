@@ -14,6 +14,7 @@ const initializeSocket = (server) => {
         console.log(`Socket connected: ${socket.id}`);
 
         socket.on("join:room", (roomId) => {
+            console.log("join:room", roomId);
             if (!roomId) return;
             socket.join(roomId);
             socket.emit("join:room:ack", roomId);
@@ -22,6 +23,40 @@ const initializeSocket = (server) => {
         socket.on("leave:room", (roomId) => {
             if (!roomId) return;
             socket.leave(roomId);
+        });
+
+        socket.on("chat:message", (payload = {}, ack) => {
+            const { roomId, content, senderId, receiverId, tempId } = payload;
+
+            if (!roomId || !content || !senderId) {
+                console.warn("chat:message missing fields", payload);
+                if (typeof ack === "function") {
+                    ack({ success: false, error: "Invalid message payload" });
+                }
+                return;
+            }
+
+            console.log("Received chat message:", {
+                roomId,
+                content,
+                senderId,
+                receiverId,
+                tempId,
+                socketId: socket.id,
+            });
+
+            socket.to(roomId).emit("chat:message:receive", {
+                roomId,
+                content,
+                senderId,
+                receiverId,
+                tempId,
+                createdAt: new Date().toISOString(),
+            });
+
+            if (typeof ack === "function") {
+                ack({ success: true });
+            }
         });
 
         socket.on("disconnect", (reason) => {
