@@ -14,14 +14,32 @@ const initializeSocket = (server) => {
     io.on("connection", (socket) => {
         console.log(`Socket connected: ${socket.id}`);
 
-        socket.on("join:room", async (data) => {
+        socket.on("join:room", async (data, ack) => {
             console.log("join:room", data);
+
             const response = await handleJoinRoom(data);
-            if (response.success) {
-                socket.join(response.room._id);
-                socket.emit("join:room:ack", response.room._id);
+
+            if (!response.success) {
+                if (typeof ack === "function") {
+                    ack({ success: false, error: response.message });
+                }
+                return;
             }
 
+            const roomId = response.room._id.toString();
+            socket.join(roomId);
+
+            const payload = {
+                success: true,
+                roomId,
+                room: response.room,
+            };
+
+            socket.emit("join:room:ack", payload);
+
+            if (typeof ack === "function") {
+                ack(payload);
+            }
         });
 
         socket.on("leave:room", (roomId) => {
