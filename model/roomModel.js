@@ -38,12 +38,6 @@ const roomSchema = new mongoose.Schema(
             type: Map,
             of: String,
         },
-        directKey: {
-            type: String,
-            unique: true,
-            sparse: true,
-            index: true,
-        },
         admins: [
             {
                 type: mongoose.Schema.Types.ObjectId,
@@ -56,35 +50,6 @@ const roomSchema = new mongoose.Schema(
     }
 );
 
-roomSchema.path("participants").validate(function (value) {
-    if (!Array.isArray(value) || value.length === 0) {
-        return false;
-    }
-
-    if (this.type === "direct" && value.length !== 2) {
-        return false;
-    }
-
-    return true;
-}, "Participants array is invalid for the selected room type.");
-
-roomSchema.pre("validate", function (next) {
-    if (this.type === "group") {
-        this.directKey = undefined;
-        return next();
-    }
-
-    if (!Array.isArray(this.participants) || this.participants.length !== 2) {
-        return next(new Error("Direct rooms require exactly two participants."));
-    }
-
-    const [first, second] = this.participants
-        .map((id) => id.toString())
-        .sort((a, b) => (a > b ? 1 : -1));
-
-    this.directKey = `${first}:${second}`;
-    return next();
-});
 
 const Room = mongoose.model("Room", roomSchema);
 

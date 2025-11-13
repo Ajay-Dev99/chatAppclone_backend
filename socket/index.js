@@ -1,4 +1,5 @@
 const { Server } = require("socket.io");
+const { handleJoinRoom } = require("../controllers/socketController.js/socketControllers");
 
 const initializeSocket = (server) => {
     const io = new Server(server, {
@@ -13,11 +14,14 @@ const initializeSocket = (server) => {
     io.on("connection", (socket) => {
         console.log(`Socket connected: ${socket.id}`);
 
-        socket.on("join:room", (roomId) => {
-            console.log("join:room", roomId);
-            if (!roomId) return;
-            socket.join(roomId);
-            socket.emit("join:room:ack", roomId);
+        socket.on("join:room", async (data) => {
+            console.log("join:room", data);
+            const response = await handleJoinRoom(data);
+            if (response.success) {
+                socket.join(response.room._id);
+                socket.emit("join:room:ack", response.room._id);
+            }
+
         });
 
         socket.on("leave:room", (roomId) => {
