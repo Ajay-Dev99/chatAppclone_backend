@@ -99,6 +99,34 @@ const initializeSocket = (server) => {
             }
         });
 
+        // Typing indicators
+        socket.on("typing:start", (data) => {
+            const { roomId, userId, userName } = data;
+            if (!roomId || !userId) return;
+
+            console.log(`User ${userName} started typing in room ${roomId}`);
+
+            // Broadcast to all other users in the room (not sender)
+            socket.to(roomId).emit("typing:start", {
+                roomId,
+                userId,
+                userName
+            });
+        });
+
+        socket.on("typing:stop", (data) => {
+            const { roomId, userId } = data;
+            if (!roomId || !userId) return;
+
+            console.log(`User ${userId} stopped typing in room ${roomId}`);
+
+            // Broadcast to all other users in the room (not sender)
+            socket.to(roomId).emit("typing:stop", {
+                roomId,
+                userId
+            });
+        });
+
         socket.on("disconnect", (reason) => {
             console.log(`Socket disconnected: ${socket.id} - ${reason}`);
         });
