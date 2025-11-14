@@ -59,7 +59,10 @@ const messageSchema = new mongoose.Schema(
     }
 );
 
-messageSchema.index({ room: 1, createdAt: -1 });
+// Optimized indexes for efficient queries
+messageSchema.index({ room: 1, createdAt: -1 }); // Main query for fetching messages
+messageSchema.index({ room: 1, _id: -1 }); // Cursor-based pagination
+messageSchema.index({ room: 1, sender: 1, readBy: 1 }); // Unread messages query
 messageSchema.index({ sender: 1, receiver: 1, room: 1 });
 
 const Message = mongoose.model("Message", messageSchema);
