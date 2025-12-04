@@ -127,6 +127,49 @@ const initializeSocket = (server) => {
             });
         });
 
+        // Connection request events
+        socket.on("connection:request", (data) => {
+            const { recipientId, request } = data;
+            if (!recipientId) return;
+
+            console.log(`Connection request sent to ${recipientId}`);
+
+            // Emit to recipient's room (using their userId as room)
+            io.to(`user:${recipientId}`).emit("connection:request:received", {
+                request
+            });
+        });
+
+        socket.on("connection:accepted", (data) => {
+            const { requesterId, connection } = data;
+            if (!requesterId) return;
+
+            console.log(`Connection accepted by ${socket.auth?.userId} for ${requesterId}`);
+
+            // Notify the original requester
+            io.to(`user:${requesterId}`).emit("connection:accepted", {
+                connection
+            });
+        });
+
+        socket.on("connection:rejected", (data) => {
+            const { requesterId, connectionId } = data;
+            if (!requesterId) return;
+
+            console.log(`Connection rejected for ${requesterId}`);
+
+            // Notify the original requester
+            io.to(`user:${requesterId}`).emit("connection:rejected", {
+                connectionId
+            });
+        });
+
+        // Join user's personal room for notifications
+        if (socket.auth?.userId) {
+            socket.join(`user:${socket.auth.userId}`);
+            console.log(`User ${socket.auth.userId} joined personal room`);
+        }
+
         socket.on("disconnect", (reason) => {
             console.log(`Socket disconnected: ${socket.id} - ${reason}`);
         });
