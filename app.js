@@ -8,30 +8,44 @@ const router = require("./router");
 const initializeSocket = require("./socket");
 
 const app = express();
-const server = http.createServer(app);
 
+// Connect to database
 connectDB();
 
+// CORS configuration
 app.use(
     cors({
-        origin: ["https://whatsapp-clone-silk-rho.vercel.app", process.env.CLIENT_URL || "http://localhost:5173"],
+        origin: [
+            "https://whatsapp-clone-silk-rho.vercel.app",
+            process.env.CLIENT_URL,
+            "http://localhost:5173"
+        ].filter(Boolean),
         credentials: true,
         methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     })
 );
+
 app.use(express.json());
 
+// API routes
 app.use("/api", router);
 
-app.use("/", (req, res) => {
-    res.send("backend is running and hosted successfully");
+// Health check
+app.get("/", (req, res) => {
+    res.json({ status: "ok", message: "Backend is running" });
 });
 
-const PORT = process.env.PORT || 3000;
+// Only start server if NOT running on Vercel (local development)
+if (!process.env.VERCEL) {
+    const server = http.createServer(app);
+    const io = initializeSocket(server);
+    app.set("io", io);
 
-const io = initializeSocket(server);
-app.set("io", io);
+    const PORT = process.env.PORT || 3000;
+    server.listen(PORT, () => {
+        console.log(`Server is running on port ${PORT}`);
+    });
+}
 
-server.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-});
+// Export for Vercel serverless
+module.exports = app;
