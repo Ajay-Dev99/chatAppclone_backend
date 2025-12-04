@@ -386,7 +386,7 @@ const getConnections = async (req, res) => {
         }
 
         const userId = req.user._id;
-        
+
         // Get all accepted connections
         const connections = await Connection.find({
             $or: [
