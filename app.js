@@ -22,6 +22,10 @@ app.use(express.json());
 
 app.use("/api", router);
 
+app.use("/", (req, res) => {
+    res.send("backend is running and hosted successfully");
+});
+
 const PORT = process.env.PORT || 3000;
 
 const io = initializeSocket(server);

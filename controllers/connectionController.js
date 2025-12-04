@@ -376,7 +376,7 @@ const getSentRequests = async (req, res) => {
 };
 
 /**
- * Get all connected users (friends)
+ * Get all connected users (friends) with last message and unread count
  * @route GET /api/v1/connections
  */
 const getConnections = async (req, res) => {
@@ -386,12 +386,91 @@ const getConnections = async (req, res) => {
         }
 
         const userId = req.user._id;
-        const connectedUsers = await Connection.getConnectedUsers(userId);
+        
+        // Get all accepted connections
+        const connections = await Connection.find({
+            $or: [
+                { requester: userId, status: "accepted" },
+                { recipient: userId, status: "accepted" },
+            ],
+        })
+            .populate("requester", "name email profilePicture online")
+            .populate("recipient", "name email profilePicture online")
+            .lean();
+
+        // Find all rooms between current user and connected users
+        const Room = require("../model/roomModel");
+        const Message = require("../model/messageModel");
+
+        const rooms = await Room.find({
+            type: "direct",
+            participants: { $all: [userId] },
+        }).lean();
+
+        // Build room map for quick lookup
+        const roomMap = {};
+        rooms.forEach((room) => {
+            const otherUserId = room.participants.find(
+                (p) => p.toString() !== userId.toString()
+            );
+            if (otherUserId) {
+                roomMap[otherUserId.toString()] = room;
+            }
+        });
+
+        // Get last message and unread count for each connection
+        const connectedUsersWithMessages = await Promise.all(
+            connections.map(async (conn) => {
+                const otherUser = conn.requester._id.toString() === userId.toString()
+                    ? conn.recipient
+                    : conn.requester;
+
+                const room = roomMap[otherUser._id.toString()];
+                let lastMessage = null;
+                let unreadCount = 0;
+
+                if (room) {
+                    // Get last message
+                    lastMessage = await Message.findOne({ room: room._id })
+                        .sort({ createdAt: -1 })
+                        .select("content sender createdAt type status")
+                        .lean();
+
+                    // Get unread count (messages not read by current user)
+                    unreadCount = await Message.countDocuments({
+                        room: room._id,
+                        sender: { $ne: userId },
+                        readBy: { $ne: userId },
+                    });
+                }
+
+                return {
+                    ...otherUser,
+                    roomId: room?._id || null,
+                    lastMessage: lastMessage
+                        ? {
+                            content: lastMessage.content,
+                            createdAt: lastMessage.createdAt,
+                            type: lastMessage.type,
+                            isFromMe: lastMessage.sender.toString() === userId.toString(),
+                        }
+                        : null,
+                    unreadCount,
+                };
+            })
+        );
+
+        // Sort by last message time (most recent first)
+        connectedUsersWithMessages.sort((a, b) => {
+            const aTime = a.lastMessage?.createdAt || 0;
+            const bTime = b.lastMessage?.createdAt || 0;
+            return new Date(bTime) - new Date(aTime);
+        });
 
         return res.status(200).json({
             success: true,
-            data: connectedUsers,
-            count: connectedUsers.length,
+            data: connectedUsersWithMessages,
+            count: connectedUsersWithMessages.length,
         });
     } catch (error) {
         console.error("Error fetching connections:", error);
