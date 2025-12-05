@@ -1,5 +1,7 @@
 const { Server } = require("socket.io");
 const { handleJoinRoom, handleSendMessage } = require("../controllers/socketController.js/socketControllers");
+const User = require("../model/userModel");
+const Connection = require("../model/connectionModel");
 
 const initializeSocket = (server) => {
     const io = new Server(server, {
@@ -11,8 +13,45 @@ const initializeSocket = (server) => {
         transports: ["websocket", "polling"],
     });
 
-    io.on("connection", (socket) => {
+    io.on("connection", async (socket) => {
         console.log(`Socket connected: ${socket.id}`);
+
+        // Extract authenticated user id from handshake
+        const auth = socket.handshake?.auth || {};
+        const userId = auth.userId;
+
+        if (userId) {
+            socket.data.userId = userId;
+
+            try {
+                // Mark user online
+                await User.findByIdAndUpdate(userId, { online: true }, { new: true });
+
+                // Join user's personal room for notifications
+                socket.join(`user:${userId}`);
+                console.log(`User ${userId} joined personal room and marked online`);
+
+                // Notify all accepted connections that this user is online
+                const connections = await Connection.find({
+                    status: "accepted",
+                    $or: [{ requester: userId }, { recipient: userId }],
+                }).lean();
+
+                connections.forEach((conn) => {
+                    const otherUserId =
+                        conn.requester.toString() === userId.toString()
+                            ? conn.recipient.toString()
+                            : conn.requester.toString();
+
+                    io.to(`user:${otherUserId}`).emit("user:online", {
+                        userId,
+                        online: true,
+                    });
+                });
+            } catch (err) {
+                console.error("Error updating user online status on connect:", err);
+            }
+        }
 
         socket.on("join:room", async (data, ack) => {
             console.log("join:room", data);
@@ -164,14 +203,39 @@ const initializeSocket = (server) => {
             });
         });
 
-        // Join user's personal room for notifications
-        if (socket.auth?.userId) {
-            socket.join(`user:${socket.auth.userId}`);
-            console.log(`User ${socket.auth.userId} joined personal room`);
-        }
-
-        socket.on("disconnect", (reason) => {
+        socket.on("disconnect", async (reason) => {
             console.log(`Socket disconnected: ${socket.id} - ${reason}`);
+
+            const disconnectedUserId = socket.data?.userId;
+            if (!disconnectedUserId) return;
+
+            try {
+                // Mark user offline and update last seen
+                await User.findByIdAndUpdate(disconnectedUserId, {
+                    online: false,
+                    lastSeen: new Date(),
+                });
+
+                // Notify accepted connections that this user went offline
+                const connections = await Connection.find({
+                    status: "accepted",
+                    $or: [{ requester: disconnectedUserId }, { recipient: disconnectedUserId }],
+                }).lean();
+
+                connections.forEach((conn) => {
+                    const otherUserId =
+                        conn.requester.toString() === disconnectedUserId.toString()
+                            ? conn.recipient.toString()
+                            : conn.requester.toString();
+
+                    io.to(`user:${otherUserId}`).emit("user:offline", {
+                        userId: disconnectedUserId,
+                        online: false,
+                    });
+                });
+            } catch (err) {
+                console.error("Error updating user online status on disconnect:", err);
+            }
         });
     });
 
